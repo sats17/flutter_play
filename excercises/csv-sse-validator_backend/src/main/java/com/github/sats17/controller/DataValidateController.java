@@ -12,6 +12,7 @@ import org.jboss.resteasy.reactive.RestStreamElementType;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Path("/api")
 public class DataValidateController {
@@ -22,27 +23,19 @@ public class DataValidateController {
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<GenericValidationResponse> uploadCustomers(List<JsonNode> incomingData) {
+        // Using JsonNode to handle dynamic JSON structure.
         System.out.println("Total Records Received: " + incomingData.size());
-
-        // Stream directly from the list of dynamic JSON nodes
         return Multi.createFrom().iterable(incomingData)
-                .onItem().transform(jsonNode -> {
-                    // Extract the "id" field as an int.
-                    // If "id" is missing, it defaults to 0 (or you can throw an exception)
+                .onItem().transformToUniAndMerge(jsonNode -> {
                     int id = jsonNode.has("id") ? jsonNode.get("id").asInt() : 0;
-
-                    // Return the streamlined response
-                    return new GenericValidationResponse(id, true);
-                })
-                // Keeps your 2-second delay per item
-                .onItem().call(response ->
-                        Uni.createFrom().nullItem().onItem().delayIt().by(Duration.ofMillis(2000))
-                );
+                    // different delay per item
+                    long delay = ThreadLocalRandom.current().nextLong(1000, 5000);
+                    GenericValidationResponse response = new GenericValidationResponse(id, true);
+                    // Mimicking processing time with a random delay
+                    return Uni.createFrom().item(response).onItem().delayIt().by(Duration.ofMillis(delay));
+                });
     }
 
-    // Your new lightweight response structure
-    public record GenericValidationResponse(
-            int id,
-            boolean validated
-    ) {}
+    public record GenericValidationResponse(int id, boolean validated) {
+    }
 }
